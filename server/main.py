@@ -3,6 +3,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from typing import List, Optional
 from pydantic import BaseModel
 from mock_data import inventory_items, orders, demand_forecasts, backlog_items, spending_summary, monthly_spending, category_spending, recent_transactions, purchase_orders
+import uuid
+from datetime import date, timedelta
 
 app = FastAPI(title="Factory Inventory Management System")
 
@@ -89,6 +91,7 @@ class DemandForecast(BaseModel):
     forecasted_demand: int
     trend: str
     period: str
+    unit_cost: float
 
 class BacklogItem(BaseModel):
     id: str
@@ -119,6 +122,26 @@ class CreatePurchaseOrderRequest(BaseModel):
     unit_cost: float
     expected_delivery_date: str
     notes: Optional[str] = None
+
+class RestockingOrderItem(BaseModel):
+    item_sku: str
+    item_name: str
+    quantity: int
+    unit_cost: float
+    subtotal: float
+
+class RestockingOrder(BaseModel):
+    id: str
+    order_number: str
+    items: List[RestockingOrderItem]
+    total_value: float
+    order_date: str
+    expected_delivery: str
+
+class CreateRestockingOrderRequest(BaseModel):
+    items: List[RestockingOrderItem]
+
+restocking_orders: list = []
 
 # API endpoints
 @app.get("/")
@@ -303,6 +326,33 @@ def get_monthly_trends():
     result = list(months.values())
     result.sort(key=lambda x: x['month'])
     return result
+
+@app.get("/api/restocking/orders", response_model=List[RestockingOrder])
+def get_restocking_orders():
+    """Get all submitted restocking orders"""
+    return restocking_orders
+
+@app.post("/api/restocking/orders", response_model=RestockingOrder, status_code=201)
+def create_restocking_order(request: CreateRestockingOrderRequest):
+    """Create a new restocking order from demand forecast recommendations"""
+    if not request.items:
+        raise HTTPException(status_code=400, detail="Order must contain at least one item")
+
+    today = date.today()
+    order_id = str(uuid.uuid4())
+    order_number = f"RST-{today.strftime('%Y%m%d')}-{order_id[:4].upper()}"
+    total_value = round(sum(item.quantity * item.unit_cost for item in request.items), 2)
+
+    new_order = {
+        "id": order_id,
+        "order_number": order_number,
+        "items": [item.dict() for item in request.items],
+        "total_value": total_value,
+        "order_date": today.isoformat(),
+        "expected_delivery": (today + timedelta(days=14)).isoformat()
+    }
+    restocking_orders.append(new_order)
+    return new_order
 
 if __name__ == "__main__":
     import uvicorn

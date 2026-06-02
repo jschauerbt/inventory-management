@@ -27,6 +27,36 @@
         </div>
       </div>
 
+      <details v-if="restockingOrders.length > 0" class="restocking-section" open>
+        <summary class="restocking-summary">
+          Submitted Restocking Orders ({{ restockingOrders.length }}) &mdash; 14-day delivery
+        </summary>
+        <div class="card restocking-card">
+          <div class="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>Order Number</th>
+                  <th>Items</th>
+                  <th>Total Value</th>
+                  <th>Order Date</th>
+                  <th>Expected Delivery</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="ro in restockingOrders" :key="ro.id">
+                  <td><strong>{{ ro.order_number }}</strong></td>
+                  <td>{{ ro.items.length }} item(s)</td>
+                  <td><strong>{{ currencySymbol }}{{ ro.total_value.toLocaleString() }}</strong></td>
+                  <td>{{ formatDate(ro.order_date) }}</td>
+                  <td>{{ formatDate(ro.expected_delivery) }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </details>
+
       <div class="card">
         <div class="card-header">
           <h3 class="card-title">{{ t('orders.allOrders') }} ({{ orders.length }})</h3>
@@ -95,6 +125,15 @@ export default {
     const loading = ref(true)
     const error = ref(null)
     const orders = ref([])
+    const restockingOrders = ref([])
+
+    const loadRestockingOrders = async () => {
+      try {
+        restockingOrders.value = await api.getRestockingOrders()
+      } catch (err) {
+        // non-blocking — restocking section simply stays hidden
+      }
+    }
 
     // Use shared filters
     const {
@@ -153,7 +192,10 @@ export default {
       })
     }
 
-    onMounted(loadOrders)
+    onMounted(() => {
+      loadOrders()
+      loadRestockingOrders()
+    })
 
     return {
       t,
@@ -165,13 +207,53 @@ export default {
       formatDate,
       currencySymbol,
       translateProductName,
-      translateCustomerName
+      translateCustomerName,
+      restockingOrders
     }
   }
 }
 </script>
 
 <style scoped>
+/* Restocking section */
+.restocking-section {
+  margin-bottom: 1.25rem;
+}
+
+.restocking-summary {
+  cursor: pointer;
+  font-size: 1rem;
+  font-weight: 700;
+  color: #0f172a;
+  list-style: none;
+  user-select: none;
+  padding: 0.5rem 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.restocking-summary::-webkit-details-marker {
+  display: none;
+}
+
+.restocking-summary::before {
+  content: '▶';
+  display: inline-block;
+  font-size: 0.75rem;
+  transition: transform 0.2s;
+  color: #2563eb;
+  margin-right: 0.25rem;
+}
+
+.restocking-section[open] .restocking-summary::before {
+  transform: rotate(90deg);
+}
+
+.restocking-card {
+  margin-top: 0.75rem;
+}
+
 /* Fixed table layout to prevent column shifting */
 .orders-table {
   table-layout: fixed;
